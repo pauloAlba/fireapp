@@ -12,7 +12,12 @@ import {
   onSnapshot,
 } from "firebase/firestore";
 
-import {createUserWithEmailAndPassword} from "firebase/auth"
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+} from "firebase/auth";
 
 import "./app.css";
 import { async } from "@firebase/util";
@@ -24,12 +29,16 @@ function App() {
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
 
+  const [user, setUser] = useState(false);
+  const [userDetail, setUserDetail] = useState("");
+
   const [posts, setPosts] = useState([]);
 
   useEffect(() => {
     async function loadPosts() {
-      const unsub = onSnapshot(collection(db, "posts"), () => {
+      const unsub = onSnapshot(collection(db, "posts"), (snapshot) => {
         let listaPost = [];
+
         snapshot.forEach((doc) => {
           listaPost.push({
             id: doc.id,
@@ -40,7 +49,28 @@ function App() {
         setPosts(listaPost);
       });
     }
-    buscarPosts();
+    loadPosts();
+  }, []);
+
+  useEffect(() => {
+    async function checkLogin() {
+      onAuthStateChanged(auth, (user) => {
+        if (user) {
+          // se tem usuario logado ele entra aqui...
+          console.log(user);
+          setUser(true);
+          setUserDetail({
+            uid: user.uid,
+            email: user.email,
+          });
+        } else {
+          // não possui nenhum user logado.
+          setUser(false);
+          setUserDetail({});
+        }
+      });
+    }
+    checkLogin();
   }, []);
 
   async function handleAdd() {
@@ -131,20 +161,60 @@ function App() {
       })
       .catch((error) => console.log(error));
   }
-  async function novoUsuario(){
+  async function novoUsuario() {
     await createUserWithEmailAndPassword(auth, email, senha)
-    .then((value)=>{
-      console.log("CADASTRADO COM SUCESSO!")
-      console.log(value)
-      setEmail("")
-      setSenha("")
-    })
-    .catch((error)=> console.log(error))
+      .then((value) => {
+        console.log("CADASTRADO COM SUCESSO!");
+        console.log(value);
+        setEmail("");
+        setSenha("");
+      })
+      .catch((error) => console.log(error));
+  }
+
+  async function logarUsuario() {
+    await signInWithEmailAndPassword(auth, email, senha)
+      .then((value) => {
+        console.log("user logado com sucesso");
+        console.log(value.user);
+
+        setUserDetail({
+          uid: value.user.uid,
+          email: value.user.email,
+        });
+        setUser(true);
+
+        setEmail("");
+        setSenha("");
+      })
+      .catch(() => {
+        console.log("ERRO AO FAZER LOGIN");
+      });
+  }
+
+  async function fazerLogout() {
+    await signOut(auth);
+    setUser(false);
+    setUserDetail({});
   }
 
   return (
     <div className="App">
       <h1>ReactsJS + Firebase</h1>
+
+      {user && (
+        <div>
+          <strong>Seja bem-vindo(a) (Você está logado!)</strong>
+          <br />
+          <span>
+            ID: {userDetail.uid} - Email: {userDetail.email}
+          </span>
+          <br />
+          <button onClick={fazerLogout}>Sair da conta</button>
+          <br />
+          <br />
+        </div>
+      )}
 
       <div className="container">
         <h2>Usuários</h2>
@@ -162,8 +232,10 @@ function App() {
           value={senha}
           onChange={(e) => setSenha(e.target.value)}
           placeholder="Inform sua senha"
-        /> <br />
+        />{" "}
+        <br />
         <button onClick={novoUsuario}>Cadastrar</button>
+        <button onClick={logarUsuario}>Fazer login</button>
       </div>
       <br />
       <br />
